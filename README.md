@@ -1,5 +1,5 @@
 # Applied Statistics for STEM Researchers
-**Martin Luther University Halle-Wittenberg – Department of Molecular Medicine**  
+**Martin Luther University Halle-Wittenberg – Institute of Molecular Medicine**  
 *Instructor: Frank Hause (Hüttelmaier Lab)*  
 
 ---
@@ -32,12 +32,13 @@ You are free to use, adapt, and share the material with attribution.
 ## Contact
 For questions or feedback:  
 **Frank Hause**  
-Department of Molecular Medicine  
+Institute of Molecular Medicine  
 Martin Luther University Halle-Wittenberg  
 Email: [frank.hause@pharmazie.uni-halle.de](mailto:frank.hause@pharmazie.uni-halle.de)  
 Socials: [@fhause.bsky.social](https://bsky.app/profile/fhause.bsky.social)
 
 ---
+
 
 
 
