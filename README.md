@@ -34,8 +34,9 @@ For questions or feedback:
 **Frank Hause**  
 Department of Molecular Medicine  
 Martin Luther University Halle-Wittenberg  
-frank.hause@pharmazie.uni-halle.de  
-@fhause.bsky.social‬
+Email: [frank.hause@pharmazie.uni-halle.de](mailto:frank.hause@pharmazie.uni-halle.de)  
+Socials: [@fhause.bsky.social](https://bsky.app/profile/fhause.bsky.social)
 
 ---
+
 
