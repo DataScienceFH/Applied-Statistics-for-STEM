@@ -1,0 +1,289 @@
+---
+title: "Applied Statistics for STEM Researchers - Part 1"
+author: "Frank Hause"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+```{r}
+# ──────────────────────────────────────────────
+# Normality Testing
+# • Kolmogorov–Smirnov Test (compares sample vs. normal distribution)
+# • Shapiro–Wilk Test (tests deviation from normality for small to medium samples)
+# ──────────────────────────────────────────────
+
+# Example data
+set.seed(123)
+your_data <- stats::rnorm(100, mean = 0, sd = 1)
+
+# Kolmogorov–Smirnov Test
+stats::ks.test(your_data, "pnorm")
+
+# Shapiro–Wilk Test
+stats::shapiro.test(your_data)
+```
+```{r}
+# ──────────────────────────────────────────────
+# Homogeneity of Variances
+# • Levene’s Test checks whether groups have equal variances
+# • Assumption required for parametric tests like ANOVA
+# ──────────────────────────────────────────────
+
+# Load required package
+if (!requireNamespace("car", quietly = TRUE)) utils::install.packages("car")
+library(car)
+
+# Example data
+set.seed(123)
+your_group1 <- stats::rnorm(50, mean = 100, sd = 5)   # Group 1: SD = 5
+your_group2 <- stats::rnorm(50, mean = 100, sd = 10)  # Group 2: SD = 10
+your_group3 <- stats::rnorm(50, mean = 100, sd = 15)  # Group 3: SD = 15
+
+# Combine into a data frame
+df <- base::data.frame(
+  value = c(your_group1, your_group2, your_group3),
+  group = base::factor(rep(c("your_group1", "your_group2", "your_group3"), each = 50))
+)
+
+# Levene’s Test for equality of variances
+car::leveneTest(value ~ group, data = df)
+```
+```{r}
+# ──────────────────────────────────────────────
+# Chi-square Test of Independence
+# • Tests whether two categorical variables are associated
+# • Compares observed vs. expected frequencies
+# ──────────────────────────────────────────────
+
+# Define observed frequencies
+observed <- base::matrix(
+  c(4, 8, 12,
+    5, 4, 9,
+    7, 9, 6),
+  nrow = 3,
+  byrow = TRUE
+)
+
+# Assign row and column names (optional, for clarity)
+base::dimnames(observed) <- list(
+  RowCategory = c("In.vivo", "Phys.remnants", "Footage"),
+  ColCategory = c("B.Sc", "M.Sc", "PhD")
+)
+
+# Perform Chi-square test
+chi2_result <- stats::chisq.test(observed)
+
+# View test result
+chi2_result
+
+```
+```{r}
+# ──────────────────────────────────────────────
+# Fisher’s Exact Test
+# • Tests association between two categorical variables
+# • Used when sample size is small or expected frequencies < 5
+# ──────────────────────────────────────────────
+
+# Example data
+data <- base::matrix(
+  c(4, 8,
+    5, 4),
+  nrow = 2,
+  byrow = TRUE
+)
+
+# Perform Fisher’s Exact Test
+result <- stats::fisher.test(data)
+
+# View test result
+result
+
+```
+```{r}
+# ──────────────────────────────────────────────
+# Mann–Whitney U Test (Wilcoxon Rank-Sum Test)
+# • Non-parametric alternative to the two-sample t-test
+# • Compares medians between two independent groups
+# ──────────────────────────────────────────────
+
+# Example data
+your_group1 <- c(5, 8, 7, 6, 9, 5)
+your_group2 <- c(7, 7, 6, 8, 10, 9)
+
+# Perform Mann–Whitney U test
+test_result <- stats::wilcox.test(your_group1, your_group2)
+
+# View test result
+test_result
+```
+```{r}
+# ──────────────────────────────────────────────
+# Wilcoxon Signed-Rank Test (Paired Version)
+# • Non-parametric alternative to the paired t-test
+# • Tests whether median differences between paired observations = 0
+# ──────────────────────────────────────────────
+
+# Example paired data (same subjects measured twice)
+your_group1 <- c(5, 8, 7, 6, 9, 5)   # Before treatment
+your_group2 <- c(7, 7, 6, 8, 10, 9)  # After treatment
+
+# Perform Wilcoxon Signed-Rank Test
+test_result <- stats::wilcox.test(your_group1, your_group2, paired = TRUE)
+
+# View test result
+test_result
+```
+```{r}
+# ──────────────────────────────────────────────
+# Student’s t-Test for Independent Samples
+# • Parametric test comparing means of two independent groups
+# • Assumes normality and equal variances (check with Shapiro–Wilk & Levene)
+# ──────────────────────────────────────────────
+
+# Example data
+your_group1 <- c(5, 8, 7, 6, 9, 5)
+your_group2 <- c(7, 7, 6, 8, 10, 9)
+
+# Perform Student’s t-test for independent samples
+test_result <- stats::t.test(your_group1, your_group2, var.equal = TRUE)
+
+# View test result
+test_result
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Paired Sample t-Test
+# • Parametric test for comparing means of two related (paired) groups
+# • Tests whether the mean difference between paired observations = 0
+# ──────────────────────────────────────────────
+
+# Example paired data
+your_group1 <- c(5, 8, 7, 6, 9, 5)   # Before treatment
+your_group2 <- c(7, 7, 6, 8, 10, 9)  # After treatment
+
+# Perform paired sample t-test
+test_result <- stats::t.test(your_group1, your_group2, paired = TRUE)
+
+# View test result
+test_result
+```
+```{r}
+# ──────────────────────────────────────────────
+# Kruskal–Wallis Test
+# • Non-parametric alternative to one-way ANOVA
+# • Tests whether medians differ across three or more independent groups
+# ──────────────────────────────────────────────
+
+# Example data for three groups
+your_group1 <- c(20, 21, 19, 20, 22)
+your_group2 <- c(25, 28, 22, 24, 26)
+your_group3 <- c(30, 29, 31, 32, 33)
+
+# Combine data and create grouping variable
+data <- c(your_group1, your_group2, your_group3)
+group <- base::factor(rep(c("Group 1", "Group 2", "Group 3"), each = 5))
+
+# Perform Kruskal–Wallis test
+test_result <- stats::kruskal.test(data ~ group)
+
+# View test result
+test_result
+```
+```{r}
+# ──────────────────────────────────────────────
+# Welch ANOVA
+# • Parametric test comparing means across three or more groups
+# • Robust to unequal variances (does not assume homogeneity)
+# ──────────────────────────────────────────────
+
+# Example data for three groups
+your_group1 <- c(20, 21, 19, 20, 22)
+your_group2 <- c(25, 28, 22, 24, 26)
+your_group3 <- c(30, 29, 31, 32, 33)
+
+# Combine data and create grouping variable
+data <- c(your_group1, your_group2, your_group3)
+group <- base::factor(rep(c("Group 1", "Group 2", "Group 3"), each = 5))
+
+# Perform Welch ANOVA
+test_result <- stats::oneway.test(data ~ group)
+
+# View test result
+test_result
+```
+```{r}
+# ──────────────────────────────────────────────
+# One-Way ANOVA
+# • Parametric test comparing means of three or more independent groups
+# • Assumes normality and equal variances
+# ──────────────────────────────────────────────
+
+# Example data for three groups
+your_group1 <- c(5, 8, 7, 6, 5)
+your_group2 <- c(6, 7, 10, 9, 8)
+your_group3 <- c(7, 11, 9, 12, 10)
+
+# Combine data and create grouping variable
+data <- c(your_group1, your_group2, your_group3)
+group <- base::factor(rep(c("Group 1", "Group 2", "Group 3"), each = 5))
+
+# Perform One-Way ANOVA
+result <- stats::aov(data ~ group)
+
+# View ANOVA summary table
+base::summary(result)
+```
+```{r}
+# ──────────────────────────────────────────────
+# Tukey HSD Post Hoc Test
+# • Conducted after significant ANOVA result
+# • Identifies which specific group means differ
+# ──────────────────────────────────────────────
+
+# Perform ANOVA
+result <- stats::aov(data ~ group)
+base::summary(result)
+
+# Perform Tukey HSD post hoc test
+tukey_test <- stats::TukeyHSD(result)
+
+# View pairwise group comparisons
+base::print(tukey_test)
+```
+```{r}
+# ──────────────────────────────────────────────
+# Two One-Sided Tests (TOST) for Equivalence
+# • Tests whether two group means are statistically equivalent
+# • Useful when the goal is to show *no meaningful difference* between groups
+# ──────────────────────────────────────────────
+
+# Load required package
+if (!requireNamespace("TOSTER", quietly = TRUE)) utils::install.packages("TOSTER")
+library(TOSTER)
+
+# Example data: two groups of measurements
+your_group1 <- c(101, 102, 103, 97, 99, 101, 100, 102, 104, 98)
+your_group2 <- c(100, 98, 99, 101, 100, 99, 102, 103, 97, 97)
+
+# Define equivalence bounds
+lower_bound <- -3  # Lower margin of equivalence
+upper_bound <-  3  # Upper margin of equivalence
+
+# Perform the TOST equivalence test
+result <- TOSTER::tsum_TOST(
+  m1 = base::mean(your_group1),
+  sd1 = stats::sd(your_group1),
+  n1 = base::length(your_group1),
+  m2 = base::mean(your_group2),
+  sd2 = stats::sd(your_group2),
+  n2 = base::length(your_group2),
+  hypothesis = "EQU",
+  low_eqbound = lower_bound,
+  high_eqbound = upper_bound
+)
+
+# View TOST result
+result
+```
+
