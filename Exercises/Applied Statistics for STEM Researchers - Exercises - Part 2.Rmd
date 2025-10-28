@@ -1,0 +1,321 @@
+---
+title: "Applied Statistics for STEM Researchers - Exercises - Part 2"
+author: "Frank Hause"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Requirements
+
+```{r}
+# ──────────────────────────────────────────────
+# Task 0 — Build the unified CellStress dataset
+# ──────────────────────────────────────────────
+# 1) Generate a single dataset with variables:
+#    pH, conc, time, ROS (continuous), viability (0/1),
+#    death_time, status (1=event, 0=censored).
+# ──────────────────────────────────────────────
+
+set.seed(42)
+n <- 600L
+
+# Experimental design variables
+pH   <- stats::rnorm(n, mean = 7.2, sd = 0.4)
+conc <- stats::runif(n, 0, 10)
+time <- stats::runif(n, 1, 24)   # exposure time in hours
+
+# Step 1: Generate oxidative stress (ROS) as continuous phenotype
+# Baseline ROS rises with concentration and falls with pH
+ROS <- 1.5 + 0.6*conc - 0.8*(pH - 7) + 0.05*time + stats::rnorm(n, 0, 0.8)
+ROS <- base::pmax(ROS, 0)   # no negative stress
+
+# Step 2: Generate cell viability (binary outcome)
+# Higher ROS and concentration reduce survival; higher pH protects
+logit_viab <- 4 - 1.2*ROS - 0.4*conc + 1.0*(pH - 7)
+p_viab <- 1 / (1 + base::exp(-logit_viab))
+viability <- stats::rbinom(n, 1, p_viab)
+
+# Step 3: Generate survival time for hazard model
+# Death hazard increases with conc and ROS; decreases with pH
+lin_hazard <- 0.3 + 0.15*conc + 0.2*ROS - 0.25*(pH - 7)
+lambda <- base::exp(lin_hazard)
+death_time <- stats::rexp(n, rate = lambda)
+censor_time <- stats::runif(n, 0, 24)
+status <- as.integer(death_time <= censor_time)
+death_time <- base::pmin(death_time, censor_time)
+
+# Build final dataset
+cell_data <- data.frame(pH, conc, time, ROS, viability, death_time, status)
+utils::head(cell_data)
+
+```
+
+# Distributions of CellStress Data
+
+```{r}
+# ──────────────────────────────────────────────
+# Task 1 — First look: distributions and scales
+# ──────────────────────────────────────────────
+# 1) Inspect marginal distributions of pH, conc, time, ROS,
+#    viability, and observed death_time.
+# ──────────────────────────────────────────────
+
+graphics::par(mfrow = c(2, 3))
+graphics::hist(cell_data$pH,   main = "pH",   col = "grey", xlab = "")
+graphics::hist(cell_data$conc, main = "concentration", col = "grey", xlab = "")
+graphics::hist(cell_data$time, main = "exposure time", col = "grey", xlab = "")
+graphics::hist(cell_data$ROS,  main = "ROS",  col = "grey", xlab = "")
+graphics::barplot(table(cell_data$viability), main = "viability (0 or 1)")
+graphics::hist(cell_data$death_time, main = "observed death time", col = "grey", xlab = "")
+graphics::par(mfrow = c(1, 1))
+
+```
+
+# Correlations
+
+```{r}
+# ──────────────────────────────────────────────
+# Task 2 — Choose the appropriate correlation (effect size + p value)
+# ──────────────────────────────────────────────
+# 1) Check marginal distributions (Normal vs non-Normal) for conc, pH, and ROS:
+#      • Shapiro–Wilk tests and QQ plots.
+# 2) For each association, decide which correlation to report and why:
+#      (A) conc ↔ ROS
+#      (B) pH   ↔ ROS
+# 3) Run Pearson and Spearman; report the one you chose with effect size and p value.
+# ──────────────────────────────────────────────
+
+## Normality diagnostics (marginals)
+graphics::par(mfrow = c(2,3))
+# Histograms
+graphics::hist(cell_data$conc, main = "conc (hist)", col = "grey", xlab = "")
+graphics::hist(cell_data$pH,   main = "pH (hist)",   col = "grey", xlab = "")
+graphics::hist(cell_data$ROS,  main = "ROS (hist)",  col = "grey", xlab = "")
+# QQ plots
+stats::qqnorm(cell_data$conc, main = "conc (QQ)"); stats::qqline(cell_data$conc, col = "red")
+stats::qqnorm(cell_data$pH,   main = "pH (QQ)");   stats::qqline(cell_data$pH,   col = "red")
+stats::qqnorm(cell_data$ROS,  main = "ROS (QQ)");  stats::qqline(cell_data$ROS,  col = "red")
+graphics::par(mfrow = c(1,1))
+
+# Shapiro–Wilk (marginals; p > 0.05 ≈ not strongly deviating from Normal)
+sw_conc <- stats::shapiro.test(cell_data$conc)
+sw_pH   <- stats::shapiro.test(cell_data$pH)
+sw_ROS  <- stats::shapiro.test(cell_data$ROS)
+c(conc_p = sw_conc$p.value, pH_p = sw_pH$p.value, ROS_p = sw_ROS$p.value)
+
+## Visual check for linearity (scatter + LS line)
+graphics::par(mfrow = c(1,2))
+graphics::plot(cell_data$conc, cell_data$ROS, pch = 19, col = "gray50",
+               xlab = "Drug concentration (µM)", ylab = "ROS",
+               main = "ROS vs concentration")
+graphics::abline(stats::lm(ROS ~ conc, data = cell_data), col = "blue", lwd = 2)
+
+graphics::plot(cell_data$pH, cell_data$ROS, pch = 19, col = "gray50",
+               xlab = "pH", ylab = "ROS", main = "ROS vs pH")
+graphics::abline(stats::lm(ROS ~ pH, data = cell_data), col = "blue", lwd = 2)
+graphics::par(mfrow = c(1,1))
+
+## Compute BOTH correlation types for both pairs
+# (A) conc ↔ ROS
+pear_conc_ros <- stats::cor.test(cell_data$conc, cell_data$ROS, method = "pearson")
+spear_conc_ros<- stats::cor.test(cell_data$conc, cell_data$ROS, method = "spearman", exact = FALSE)
+
+# (B) pH ↔ ROS
+pear_pH_ros   <- stats::cor.test(cell_data$pH,   cell_data$ROS, method = "pearson")
+spear_pH_ros  <- stats::cor.test(cell_data$pH,   cell_data$ROS, method = "spearman", exact = FALSE)
+
+pear_conc_ros$estimate; pear_conc_ros$p.value
+spear_conc_ros$estimate; spear_conc_ros$p.value
+pear_pH_ros$estimate;   pear_pH_ros$p.value
+spear_pH_ros$estimate;  spear_pH_ros$p.value
+
+## Helper: simple recommendation (for guidance only)
+choose_corr <- function(x_sw_p, y_sw_p, linear_looks_ok = TRUE) {
+  if (isTRUE(linear_looks_ok) && x_sw_p > 0.05 && y_sw_p > 0.05) return("Recommend: Pearson")
+  return("Recommend: Spearman")
+}
+# For conc–ROS, treat "linear_looks_ok" based on your scatter impression; same for pH–ROS.
+message("conc–ROS → ",
+        choose_corr(sw_conc$p.value, sw_ROS$p.value, linear_looks_ok = TRUE))
+message("pH–ROS   → ",
+        choose_corr(sw_pH$p.value,   sw_ROS$p.value, linear_looks_ok = TRUE))
+
+
+```
+
+# Linear regression
+
+```{r}
+# ──────────────────────────────────────────────
+# Task 3 — Linear model for ROS with diagnostics
+# ──────────────────────────────────────────────
+# 1) Fit a linear model: ROS ~ pH + conc + time
+#    (effects are assumed additive).
+# 2) Plot:
+#      • Residuals vs Fitted (checks equal variance)
+#      • Normal Q–Q plot (checks normality of residuals)
+# 3) Visualize fitted ROS across concentration for three
+#    fixed pH values (6.8, 7.2, 7.6) and interpret the trends.
+# ──────────────────────────────────────────────
+
+fit_lin <- stats::lm(ROS ~ pH + conc + time, data = cell_data)
+base::summary(fit_lin)
+
+## Diagnostics (only two)
+graphics::par(mfrow = c(1, 2))
+graphics::plot(fitted(fit_lin), resid(fit_lin),
+               pch = 19, col = "gray50",
+               xlab = "Fitted values", ylab = "Residuals",
+               main = "Residuals vs Fitted")
+graphics::abline(h = 0, lty = 2, col = "red")
+
+stats::qqnorm(resid(fit_lin), main = "Normal Q–Q plot of residuals",
+              pch = 19, col = "gray50")
+stats::qqline(resid(fit_lin), col = "red", lwd = 2)
+graphics::par(mfrow = c(1,1))
+
+## Fitted ROS at fixed pH levels
+x_seq <- base::seq(0, 10, length.out = 200)
+for_level <- c(6.8, 7.2, 7.6)
+graphics::plot(cell_data$conc, cell_data$ROS, pch = 19, col = "grey80",
+               xlab = "concentration (µM)", ylab = "ROS",
+               main = "Modelled ROS response at fixed pH values")
+cols <- c("steelblue3","tomato3","seagreen3")
+for (i in seq_along(for_level)) {
+  nd <- data.frame(conc = x_seq,
+                   pH   = base::rep(for_level[i], 200),
+                   time = base::mean(cell_data$time))
+  yhat <- stats::predict(fit_lin, newdata = nd)
+  graphics::lines(x_seq, yhat, col = cols[i], lwd = 2)
+}
+graphics::legend("topleft", legend = base::paste("pH =", for_level),
+                 col = cols, lty = 1, bty = "n")
+
+```
+
+# Logistic Regression
+
+```{r}
+# ──────────────────────────────────────────────
+# Task 4 — Logistic regression for survival probability
+# ──────────────────────────────────────────────
+# 1) Fit glm(viability ~ pH * conc + time + ROS, family = binomial).
+# 2) Predict P(survival) on a pH–conc grid at median time and ROS.
+# 3) Plot a filled probability surface.
+# ──────────────────────────────────────────────
+
+fit_log <- stats::glm(viability ~ pH * conc + time + ROS,
+                      data = cell_data, family = stats::binomial())
+base::summary(fit_log)
+
+# Grid for visualization
+pH_seq   <- base::seq(6.0, 8.5, length.out = 150)
+conc_seq <- base::seq(0, 10,  length.out = 150)
+grid <- base::expand.grid(pH = pH_seq, conc = conc_seq)
+grid$time <- stats::median(cell_data$time)
+grid$ROS  <- stats::median(cell_data$ROS)
+grid$prob <- stats::predict(fit_log, newdata = grid, type = "response")
+
+# Rows = pH, cols = conc
+z <- base::matrix(grid$prob,
+                  nrow = base::length(pH_seq),
+                  ncol = base::length(conc_seq),
+                  byrow = TRUE)
+
+# Auto contour levels inside range
+z_min <- base::min(z, na.rm = TRUE)
+z_max <- base::max(z, na.rm = TRUE)
+contour_levels <- base::pretty(c(z_min, z_max), n = 6)
+contour_levels <- contour_levels[contour_levels > z_min & contour_levels < z_max]
+if (length(contour_levels) == 0L) {
+  contour_levels <- base::seq(z_min, z_max, length.out = 5)[2:4]
+}
+
+graphics::filled.contour(
+  x = conc_seq, y = pH_seq, z = z,
+  nlevels = 60,
+  color.palette = grDevices::colorRampPalette(c("navy", "skyblue", "white")),
+  xlab = "Drug concentration (µM)",
+  ylab = "pH",
+  main = "Predicted probability of cell survival",
+  key.title = graphics::title(main = "P(survive)", cex.main = 0.8),
+  plot.axes = {
+    graphics::axis(1); graphics::axis(2)
+    graphics::contour(x = conc_seq, y = pH_seq, z = z,
+                      levels = contour_levels, add = TRUE,
+                      drawlabels = TRUE, col = "black", lwd = 1.2, labcex = 0.9)
+  }
+)
+
+```
+
+# Survival Analysis
+
+```{r}
+# ──────────────────────────────────────────────
+# Task 5 — Survival analysis: KM curves and Cox model
+# ──────────────────────────────────────────────
+# 1) Create Kaplan–Meier curves stratified by concentration tertiles.
+# 2) Fit a Cox PH model: Surv(death_time, status) ~ pH + conc + ROS.
+#    Interpret hazard ratios.
+# ──────────────────────────────────────────────
+
+if (!base::requireNamespace("survival", quietly = TRUE)) utils::install.packages("survival")
+
+# Build Surv object. In this dataset:
+#   status = 1 → death event observed
+#   status = 0 → censored (alive or lost to follow-up at censor_time)
+surv_obj <- survival::Surv(time = cell_data$death_time, event = cell_data$status)
+
+# Stratify concentration into tertiles
+cell_data$conc_group <- base::cut(cell_data$conc, breaks = 3, labels = c("Low","Medium","High"))
+
+# Kaplan–Meier fit
+fit_km <- survival::survfit(surv_obj ~ conc_group, data = cell_data)
+
+# Plot KM with censoring marks (plus signs)
+graphics::plot(fit_km,
+               col = c("seagreen3","orange","red3"),
+               lwd = 2,
+               mark.time = TRUE,        # show censoring marks at censor times
+               xlab = "Time (h)",
+               ylab = "Survival probability",
+               main = "Kaplan–Meier by concentration (censoring marks shown)")
+graphics::legend("topright",
+                 legend = c("Low conc", "Medium conc", "High conc"),
+                 col = c("seagreen3","orange","red3"),
+                 lwd = 2, bty = "n")
+
+# Censoring summary: overall and by group
+overall_censored_n <- base::sum(cell_data$status == 0L)
+overall_censored_p <- overall_censored_n / base::nrow(cell_data)
+
+bygroup_censored_n <- tapply(cell_data$status == 0L, cell_data$conc_group, sum)
+bygroup_total_n    <- table(cell_data$conc_group)
+bygroup_censored_p <- bygroup_censored_n / as.numeric(bygroup_total_n)
+
+overall_censored_n; overall_censored_p
+bygroup_censored_n; bygroup_censored_p
+
+# Median survival per group (robust extraction)
+km_tab <- try(summary(fit_km)$table, silent = TRUE)
+if (!inherits(km_tab, "try-error") && !is.null(dim(km_tab)) && "median" %in% colnames(km_tab)) {
+  med_surv <- km_tab[,"median"]
+  names(med_surv) <- rownames(km_tab)
+} else {
+  s <- summary(fit_km)
+  # Split times/survival by stratum and find first time survival <= 0.5
+  idx <- base::split(seq_along(s$time), s$strata)
+  med_surv <- vapply(idx, function(i) {
+    ti <- s$time[i]; sv <- s$surv[i]
+    pos <- which(sv <= 0.5)[1]
+    if (base::is.na(pos)) NA_real_ else ti[pos]
+  }, numeric(1))
+}
+med_surv  # NA means median not reached within follow-up
+
+# Cox proportional hazards model (no residual diagnostics here)
+cox_fit <- survival::coxph(surv_obj ~ pH + conc + ROS, data = cell_data)
+base::summary(cox_fit)
+
+```
