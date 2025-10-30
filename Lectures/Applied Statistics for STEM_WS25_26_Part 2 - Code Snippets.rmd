@@ -1,0 +1,367 @@
+---
+title: "Applied Statistics for STEM Researchers - Part 2"
+author: "Frank Hause"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+```{r}
+# ──────────────────────────────────────────────
+# Spearman Rank Correlation
+# • Non-parametric measure of monotonic association between two variables
+# • Uses rank order instead of raw values (robust to outliers and non-linearity)
+# ──────────────────────────────────────────────
+
+# Example data
+your_group1 <- c(1, 2, 3, 4, 5)
+your_group2 <- c(2, 4, 6, 8, 10)
+
+# Calculate Spearman correlation and p-value
+stats::cor.test(your_group1, your_group2, method = "spearman")
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Pearson Correlation
+# • Parametric measure of linear association between two continuous variables
+# • Assumes normal distribution and linear relationship
+# ──────────────────────────────────────────────
+
+# Example data
+your_group1 <- c(1, 2, 3, 4, 5)
+your_group2 <- c(2, 4, 6, 8, 10)
+
+# Calculate Pearson correlation and p-value
+stats::cor.test(your_group1, your_group2, method = "pearson")
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Partial Correlation
+# • Measures association between two variables while controlling for a third
+# • Removes the linear effect of the control variable
+# ──────────────────────────────────────────────
+
+# Load required package
+if (!requireNamespace("ppcor", quietly = TRUE)) utils::install.packages("ppcor")
+library(ppcor)
+
+# Example data
+your_group1 <- c(1, 2, 3, 4, 5)
+your_group2 <- c(2, 4, 6, 8, 10)
+your_ctrl.var <- c(3, 6, 9, 12, 15)  # Control variable
+
+# Calculate partial correlation and p-value
+ppcor::pcor.test(your_group1, your_group2, your_ctrl.var, method = "pearson")
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Durbin–Watson Test
+# • Tests for autocorrelation in residuals of a regression model
+# • Important assumption check in linear regression
+# ──────────────────────────────────────────────
+
+# Load required package
+if (!requireNamespace("lmtest", quietly = TRUE)) utils::install.packages("lmtest")
+library(lmtest)
+
+# Example data
+your_indep_var <- c(1, 2, 3, 4, 5)
+your_dep_var   <- c(2, 4, 6, 8, 10)
+
+# Fit a linear regression model
+model <- stats::lm(your_dep_var ~ your_indep_var)
+
+# Get residuals
+residuals <- stats::residuals(model)
+
+# Calculate Durbin–Watson test statistic
+lmtest::dwtest(model)
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Simple Linear Regression
+# • Models relationship between a continuous predictor and outcome variable
+# • Example: Effect of Dex concentration on ATP concentration
+# ──────────────────────────────────────────────
+
+# Load required packages
+if (!requireNamespace("tidyverse", quietly = TRUE)) utils::install.packages("tidyverse")
+if (!requireNamespace("broom", quietly = TRUE)) utils::install.packages("broom")
+library(tidyverse)
+library(broom)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Generate example data
+concentration_levels <- base::seq(0.1, 100, length.out = 25)
+replicates <- 3  # Number of biological replicates
+
+# Generate data frame with Dex concentration and simulated ATP concentration
+data <- base::expand.grid(Dex_Concentration = concentration_levels,
+                          Replicate = 1:replicates) %>%
+  dplyr::mutate(
+    ATP_Concentration = 100 - 0.1 * Dex_Concentration + stats::rnorm(dplyr::n(), mean = 0, sd = 22)
+  )
+
+# Fit linear regression model
+linreg_model <- stats::lm(ATP_Concentration ~ Dex_Concentration, data = data)
+
+# Summarize model output
+base::summary(linreg_model)
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Logistic Regression (Binary Outcome)
+# • Fits a logit model and tests overall significance via likelihood ratio test
+# • Example predictors: pH, temperature, ionic strength, polarity index
+# ──────────────────────────────────────────────
+
+# Load required packages (quietly)
+if (!requireNamespace("ggplot2", quietly = TRUE)) utils::install.packages("ggplot2")
+if (!requireNamespace("caret", quietly = TRUE)) utils::install.packages("caret")
+if (!requireNamespace("pROC", quietly = TRUE)) utils::install.packages("pROC")
+if (!requireNamespace("dplyr", quietly = TRUE)) utils::install.packages("dplyr")
+library(ggplot2); library(caret); library(pROC); library(dplyr)
+
+# Reproducibility
+set.seed(123)
+
+# Generate example data
+n <- 200L
+data <- base::data.frame(
+  pH              = stats::runif(n, 5.0, 8.0),   # pH level
+  temp            = stats::runif(n, 20, 80),     # temperature in Celsius
+  ionic_strength  = stats::runif(n, 0.1, 1.0),   # ionic strength in molarity
+  polarity_index  = stats::runif(n, 0, 1)        # polarity index
+)
+
+# Create a binary outcome with a strong pH effect (for demonstration)
+data$solubility <- base::as.factor(
+  base::ifelse(data$pH < 6, 0,
+         base::ifelse(data$pH > 7, 1,
+               base::sample(0:1, n, replace = TRUE)))
+)
+
+# Fit logistic regression (logit link)
+model <- stats::glm(
+  solubility ~ pH + temp + ionic_strength + polarity_index,
+  family = stats::binomial(link = "logit"),
+  data = data
+)
+
+# Likelihood ratio test vs intercept-only model
+null_model <- stats::glm(solubility ~ 1,
+                         family = stats::binomial(link = "logit"),
+                         data = data)
+lrt_result <- stats::anova(null_model, model, test = "Chisq")
+base::print(lrt_result)
+
+# Model summary with coefficient estimates, SE, z, p
+base::summary(model)
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# ROC Curve for Logistic Regression
+# • Compute ROC and AUC using pROC
+# • Auto-flip if AUC < 0.5 (mirrored labeling)
+# • Plot ROC with ggplot2
+# ──────────────────────────────────────────────
+
+# Predicted probabilities from fitted logistic model `model`
+# (Assumes `model` and `data` from previous chunk)
+predictions <- stats::predict(model, type = "response")
+
+# Calculate ROC
+roc_obj <- pROC::roc(response = data$solubility, predictor = predictions)
+
+# Invert ROC if mirrored (AUC < 0.5 means the positive/negative are swapped)
+if (as.numeric(roc_obj$auc) < 0.5) {
+  roc_obj <- pROC::roc(
+    response  = base::as.numeric(base::as.character(data$solubility)) - 1,
+    predictor = predictions
+  )
+}
+
+# Build a tidy data.frame for plotting
+roc_df <- base::data.frame(
+  fpr = 1 - roc_obj$specificities,   # False Positive Rate = 1 - specificity
+  tpr = roc_obj$sensitivities        # True Positive Rate = sensitivity
+)
+
+# Plot ROC curve
+roc_plot <- ggplot2::ggplot(roc_df, ggplot2::aes(x = fpr, y = tpr)) +
+  ggplot2::geom_line(linewidth = 2) +
+  ggplot2::geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  ggplot2::labs(
+    x = "1 − Specificity (False Positive Rate)",
+    y = "Sensitivity (True Positive Rate)",
+    title = base::sprintf("ROC Curve (AUC = %.3f)", as.numeric(roc_obj$auc))
+  ) +
+  ggplot2::theme_minimal(base_size = 14)
+
+roc_plot
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Kaplan–Meier Survival Analysis
+# • Simulate two groups with different hazard rates
+# • Fit KM curves, perform log-rank test, and plot
+# ──────────────────────────────────────────────
+
+# Load required packages
+if (!requireNamespace("survival",  quietly = TRUE)) utils::install.packages("survival")
+if (!requireNamespace("survminer", quietly = TRUE)) utils::install.packages("survminer")
+if (!requireNamespace("ggplot2",   quietly = TRUE)) utils::install.packages("ggplot2")
+library(survival); library(survminer); library(ggplot2)
+
+# Reproducibility
+set.seed(12)
+
+# Generate survival times (exponential with different rates)
+time_high <- stats::rexp(100, rate = 0.05)  # better survival (lower hazard)
+time_low  <- stats::rexp(100, rate = 0.10)  # worse survival (higher hazard)
+
+# Build data frame and add censoring to mimic real data
+df <- base::data.frame(
+  time   = c(time_high, time_low),
+  status = c(                                   # 1 = event, 0 = censored
+    base::sample(0:1, 100, replace = TRUE, prob = c(0.7, 0.3)),  # more censoring in High
+    base::sample(0:1, 100, replace = TRUE, prob = c(0.3, 0.7))   # less in Low
+  ),
+  group  = base::factor(rep(c("High Expr.", "Low Expr."), each = 100))
+)
+
+# Fit KM curves
+fit <- survival::survfit(survival::Surv(time, status) ~ group, data = df)
+
+# Log-rank test (group difference)
+logrank <- survival::survdiff(survival::Surv(time, status) ~ group, data = df)
+logrank
+
+# Median survival per group
+survminer::surv_median(fit)
+
+# Plot KM curves (uses your palette if available)
+pal <- if (base::exists("color_palette")) color_palette[1:2] else NULL
+km_plot <- survminer::ggsurvplot(
+  fit,
+  data = df,
+  risk.table = TRUE,
+  pval = TRUE,
+  conf.int = TRUE,
+  palette = pal,
+  legend.title = "Group",
+  legend.labs = c("High Expr.", "Low Expr."),
+  xlab = "Time",
+  ylab = "Survival probability"
+)
+
+km_plot
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Log-Rank Test
+# • Compares survival distributions between two or more groups
+# • Non-parametric test for detecting group differences in survival curves
+# ──────────────────────────────────────────────
+
+# Perform Log-Rank test
+log_rank_test <- survival::survdiff(survival::Surv(time, status) ~ group, data = df)
+
+# Print the result of the Log-Rank test
+base::print(log_rank_test)
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Cox Proportional Hazards Model
+# • Models time-to-event (survival) as a function of covariates
+# • Assumes constant hazard ratios over time
+# ──────────────────────────────────────────────
+
+# Reproducibility
+set.seed(123)
+
+# Sample size
+n <- 200L
+
+# Demographics
+gender <- base::sample(c("Male", "Female", "Other"), n, replace = TRUE)
+education_level <- base::sample(c("High School", "Bachelor", "Master", "PhD"), n, replace = TRUE)
+
+# Education modifies hazard (multiplicative risk factor)
+education_risk <- c("High School" = 1.2, "Bachelor" = 0.9, "Master" = 0.7, "PhD" = 0.5)
+
+# Smoking habits / regimen
+smoking_regimen <- base::sample(c("Substitution", "No Substitution"), n, replace = TRUE)
+# Protective effect for substitution therapy (hazard multiplier < 1)
+regimen_effect <- base::ifelse(smoking_regimen == "Substitution", 0.5, 1.0)
+
+# Age effects: older → higher hazard, very young → lower hazard
+age <- stats::rnorm(n, mean = 45, sd = 12)
+age_effect <- base::ifelse(age > 50, 1.6, base::ifelse(age < 30, 0.4, 1.0))
+
+# Baseline time-to-relapse ~ Exponential(mean ≈ 60 days)
+time_to_relapse <- stats::rexp(n, rate = 1/60) *
+  base::sapply(education_level, function(x) education_risk[[x]]) *
+  age_effect * regimen_effect
+
+# Study duration: administrative censoring at 360 days
+time_to_relapse <- base::pmin(time_to_relapse, 360)
+
+# Event indicator: 1 if relapse before 360 and event observed, else 0 (censored)
+status <- base::ifelse(time_to_relapse < 360, stats::rbinom(n, 1, prob = 0.4), 0L)
+
+# Final dataset
+dataset <- base::data.frame(
+  Gender           = base::factor(gender),
+  Age              = age,
+  EducationLevel   = base::factor(education_level),
+  SmokingRegimen   = base::factor(smoking_regimen),
+  CigarettesPerDay = stats::rpois(n, lambda = 20),
+  YearsSmoking     = stats::rnorm(n, mean = 20, sd = 5),
+  TimeToEvent      = time_to_relapse,
+  Status           = status
+)
+
+# Quick sanity check
+head(dataset)
+
+# Load required package
+if (!requireNamespace("survival", quietly = TRUE)) utils::install.packages("survival")
+library(survival)
+
+# Ensure categorical variables are factors
+dataset$Gender         <- base::as.factor(dataset$Gender)
+dataset$EducationLevel <- base::as.factor(dataset$EducationLevel)
+dataset$SmokingRegimen <- base::as.factor(dataset$SmokingRegimen)
+
+# Fit the Cox proportional hazards model
+cox_model <- survival::coxph(
+  survival::Surv(TimeToEvent, Status) ~
+    Gender + Age + EducationLevel + SmokingRegimen +
+    CigarettesPerDay + YearsSmoking,
+  data = dataset
+)
+
+# Display model summary with hazard ratios and p-values
+base::summary(cox_model)
+```
+
