@@ -1,0 +1,306 @@
+---
+title: "Applied Statistics for STEM Researchers - Exercises - Part 3"
+author: "Frank Hause"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Package Requirements
+```{r}
+if (!base::requireNamespace("BiocManager", quietly = TRUE)) utils::install.packages("BiocManager")
+BiocManager::install("limma")
+BiocManager::install("mixOmics")
+```
+
+# Generate Example Dataset
+```{r}
+# ──────────────────────────────────────────────
+# Example Dataset Generation — More Realistic Expression Values
+# ──────────────────────────────────────────────
+# Creates:
+#   • cell_signals.csv — 40 samples × 60 features (approx. log2 intensities)
+# ──────────────────────────────────────────────
+
+base::set.seed(42)
+n_samp <- 40L
+n_feat <- 60L
+grp <- base::factor(rep(c("control","treated"), each = n_samp/2L))
+
+# Latent biological components (e.g., pathway activity, batch, noise)
+latent_signal <- stats::rnorm(n_samp, mean = ifelse(grp == "treated", 1.0, 0.0), sd = 0.8)
+latent_batch  <- stats::rnorm(n_samp, mean = 0.0, sd = 1.0)
+
+# Feature-specific baselines and sensitivities
+baseline <- stats::rnorm(n_feat, mean = 8.0, sd = 0.7)   # typical log2 range
+sens1    <- stats::rnorm(n_feat, mean = 0.8, sd = 0.3)   # treatment effect strength
+sens2    <- stats::rnorm(n_feat, mean = 0.5, sd = 0.3)   # batch effect strength
+
+# Generate matrix on log2 scale
+X <- base::outer(latent_signal, sens1) + base::outer(latent_batch, sens2) +
+     base::matrix(stats::rnorm(n_samp * n_feat, 0, 0.4), n_samp, n_feat) +
+     base::rep(baseline, each = n_samp)
+
+# Back-transform to intensity scale to mimic expression counts
+expr_values <- 2^X
+
+cell_signals <- base::as.data.frame(expr_values)
+base::colnames(cell_signals) <- paste0("Feat_", seq_len(n_feat))
+cell_signals$Group <- grp
+utils::write.csv(cell_signals, "cell_signals.csv", row.names = FALSE)
+base::message("✅ Wrote cell_signals.csv (simulated expression-like data)")
+```
+
+# Task 1: Data Normalization
+```{r}
+# ──────────────────────────────────────────────
+# Task 1 — Data Normalization and log2 Transformation
+# ──────────────────────────────────────────────
+# 1. Load the provided dataset `cell_signals.csv`
+# 2. Compute Z-scores feature-wise
+# 3. Apply log2(x + 1) transformation. Why add 1?
+# 4. Visualize distributions for one feature
+# ──────────────────────────────────────────────
+
+cell_signals <- utils::read.csv("cell_signals.csv", stringsAsFactors = FALSE)
+groups <- base::factor(cell_signals$Group)
+Xnum <- base::as.matrix(cell_signals[, base::setdiff(colnames(cell_signals), "Group")])
+
+X_z    <- base::scale(Xnum)           # Z-score normalization
+X_log2 <- base::log2(Xnum + 1)        # Log2 transformation
+
+# Histograms
+graphics::par(mfrow = c(1,2))
+
+graphics::hist(Xnum[,1],
+               breaks = "FD", 
+               main = "Raw Feat_1",
+               xlab = "value",
+               col = "grey20", border = "white")
+
+br_z <- seq(-4, 4, by = 0.5)
+graphics::hist(base::scale(Xnum[,1]),
+               breaks = br_z,
+               xlim = c(-4, 4),
+               main = "Z Feat_1",
+               xlab = "z",
+               col = "grey20", border = "white")
+
+graphics::par(mfrow = c(1,1))
+
+# Density Plot
+graphics::plot(stats::density(Xnum[,1]), main = "Raw vs log2 Feat_1", xlab = "", ylim = c(0, 0.5))
+graphics::lines(stats::density(X_log2[,1]), col = 2)
+graphics::legend("topright", legend = c("raw","log2"), lty = 1, col = c(1,2))
+```
+
+# Task 2: Complexity Reduction
+```{r}
+# ──────────────────────────────────────────────
+# Task 2 — PCA and PLS-DA (mixOmics::plotIndiv)
+# ──────────────────────────────────────────────
+# 1. Run PCA on the z-scored matrix X_z
+# 2. Visualize PC1–PC2 using mixOmics::plotIndiv
+# 3. Run PLS-DA with labels in `groups`
+# 4. Visualize comp1–comp2 using mixOmics::plotIndiv
+# 5. Compare separations and interpret supervision effects
+# ──────────────────────────────────────────────
+
+# PCA
+pca_res <- mixOmics::pca(X_z, ncomp = 3, center = FALSE, scale = FALSE)
+mixOmics::plotIndiv(pca_res,
+                    comp = c(1, 2),
+                    group = groups,
+                    ind.names = FALSE,
+                    legend = TRUE,
+                    title = "PCA — PC1 vs PC2")
+
+# PLS-DA
+plsda_res <- mixOmics::plsda(X_z, Y = groups, ncomp = 3)
+mixOmics::plotIndiv(plsda_res,
+                    comp = c(1, 2),
+                    group = groups,
+                    ind.names = FALSE,
+                    legend = TRUE,
+                    title = "PLS-DA — comp1 vs comp2")
+
+# ── Most discriminative features for PLS-DA (by absolute loadings on comp1–2)
+loadX <- plsda_res$loadings$X                      # variables × components
+comp_use <- 1:2                                    # change if you want more comps
+score_abs <- base::rowSums(base::abs(loadX[, comp_use, drop = FALSE]))
+ord <- base::order(score_abs, decreasing = TRUE)
+
+topN <- 15L
+top_tbl <- base::data.frame(
+  Feature       = base::rownames(loadX)[ord][seq_len(topN)],
+  Loading_comp1 = loadX[ord, 1][seq_len(topN)],
+  Loading_comp2 = loadX[ord, 2][seq_len(topN)],
+  DiscrimScore  = score_abs[ord][seq_len(topN)],
+  row.names     = NULL,
+  check.names   = FALSE
+)
+
+# Print top discriminative hits by component difference
+base::print(top_tbl)
+
+# VIP scores, also report them
+vip_mat <- mixOmics::vip(plsda_res)              # variables × components
+vip_score <- base::rowMeans(vip_mat[, comp_use, drop = FALSE])
+top_vip_ord <- base::order(vip_score, decreasing = TRUE)
+top_vip <- base::data.frame(
+  Feature  = base::rownames(vip_mat)[top_vip_ord][seq_len(topN)],
+  VIP_mean = vip_score[top_vip_ord][seq_len(topN)],
+  row.names = NULL
+)
+
+# Print top discriminative hits by VIP score
+base::print(top_vip)
+```
+
+# Task 3: Clustering Algorithms
+```{r}
+# ──────────────────────────────────────────────
+# Task 3 — Clustering Algorithms
+# ──────────────────────────────────────────────
+# 1. Perform hierarchical clustering on X_z (z-scored cell_signals data)
+# 2. Cut dendrogram into 3 clusters
+# 3. Compare cluster assignment to group labels. Are there significant differences in sample distributions throughout the cluster? How to test this?
+# 4. Perform k-means (k = 3) directly on X_z
+# 5. Visualize k-means clusters using mixOmics::plotIndiv from a PCA object
+# ──────────────────────────────────────────────
+
+# 1) Hierarchical clustering based on sample distances
+dist_mat <- stats::dist(X_z, method = "euclidean")
+hc <- stats::hclust(dist_mat, method = "complete")
+
+# Plot with group labels
+graphics::plot(hc,
+               labels = as.character(groups),
+               main = "Hierarchical Clustering (complete linkage)",
+               sub  = "Distance: Euclidean | Linkage: complete")
+
+# Plot with sample names
+sample_names <- base::rownames(X_z)
+if (is.null(sample_names) || anyNA(sample_names) || any(sample_names == "")) {
+  sample_names <- paste0("Sample_", sprintf("%02d", seq_len(nrow(X_z))))
+}
+
+graphics::plot(hc,
+               labels = sample_names,
+               main = "Hierarchical Clustering — sample names",
+               sub  = "Distance: Euclidean | Linkage: complete",
+               cex  = 0.8,            # shrink label text a bit
+               hang = -0.1)           # pull leaves to a common baseline
+
+# 2) Cut tree into 3 clusters
+cl3 <- stats::cutree(hc, k = 3L)
+
+# 3) Compare hierarchical clusters with biological groups
+base::table(Hierarchical = cl3, Group = groups)
+
+# 4) K-means directly on normalized cell signal matrix
+set_k <- 3L
+km <- stats::kmeans(X_z, centers = set_k, nstart = 25)
+base::table(Kmeans = km$cluster, Group = groups)
+
+# 5) PCA for visualization and plotting with mixOmics::plotIndiv
+pca_res <- mixOmics::pca(X_z, ncomp = 2, center = FALSE, scale = FALSE)
+mixOmics::plotIndiv(pca_res,
+                    comp = c(1, 2),
+                    group = base::factor(km$cluster),
+                    ind.names = FALSE,
+                    legend = TRUE,
+                    title = "k-means clusters visualized in PCA space")
+```
+
+# Task 4: Linear Models for Microarrays
+```{r}
+# ──────────────────────────────────────────────
+# Task 4 — LIMMA differential expression (knockout vs wildtype)
+# ──────────────────────────────────────────────
+# 1. Read expression data and sample information
+# 2. Build design and contrast matrices
+# 3. Fit linear models with empirical Bayes moderation
+# 4. Adjust p-values (raw, BH, Bonferroni)
+# 5. Create volcano plots and report significant counts
+# ──────────────────────────────────────────────
+
+# Load data
+ge <- utils::read.csv("gene_expression_for_LIMMA.csv", row.names = 1, check.names = FALSE)
+si <- utils::read.csv("sample_info.csv", stringsAsFactors = FALSE)
+
+# Match samples across both files
+common <- base::intersect(colnames(ge), si$Sample)
+ge <- ge[, common, drop = FALSE]
+si <- si[match(common, si$Sample), , drop = FALSE]
+
+# Log2 transform
+expr_log2 <- base::log2(ge + 1)
+
+# Build design matrix
+fac <- base::factor(si$Condition)
+design <- stats::model.matrix(~ 0 + fac)
+base::colnames(design) <- base::levels(fac)
+
+# Ensure correct column names for contrast
+base::message("Design matrix columns: ", paste(base::colnames(design), collapse = ", "))
+
+# Contrast: knockout vs wildtype
+contrast_mat <- limma::makeContrasts(knockout_vs_wildtype = knockout - wildtype, levels = design)
+
+# Fit linear models
+fit  <- limma::lmFit(expr_log2, design)
+fit2 <- limma::contrasts.fit(fit, contrast_mat)
+fit2 <- limma::eBayes(fit2)
+
+# Extract results for all features
+tab <- limma::topTable(fit2, number = base::nrow(expr_log2), sort.by = "P")
+
+# Add p-value adjustments
+tab$P_raw  <- tab$P.Value
+tab$P_BH   <- stats::p.adjust(tab$P_raw, method = "BH")
+tab$P_Bonf <- stats::p.adjust(tab$P_raw, method = "bonferroni")
+
+# Significance flags
+tab$Sig_raw  <- tab$P_raw  < 0.05
+tab$Sig_BH   <- tab$P_BH   < 0.05
+tab$Sig_Bonf <- tab$P_Bonf < 0.05
+
+# ── Robust NA handling for counts and plots
+n_raw  <- base::sum(tab$Sig_raw,  na.rm = TRUE)
+n_bh   <- base::sum(tab$Sig_BH,   na.rm = TRUE)
+n_bonf <- base::sum(tab$Sig_Bonf, na.rm = TRUE)
+
+base::message(sprintf(
+  "Significant genes @0.05 — raw=%d, BH=%d, Bonf=%d",
+  n_raw, n_bh, n_bonf
+))
+
+# Drop NA rows for plotting
+tab_plot <- tab[stats::complete.cases(tab[, c("logFC","P_raw","P_BH","P_Bonf")]), , drop = FALSE]
+
+# ── Volcano plots
+graphics::par(mfrow = c(1,3))
+
+graphics::plot(tab_plot$logFC, -base::log10(tab_plot$P_raw),
+               pch = 16, col = ifelse(tab_plot$P_raw < 0.05, 2, 1),
+               xlab = "logFC (knockout – wildtype)",
+               ylab = "-log10 p",
+               main = "Volcano — Raw p")
+graphics::abline(h = -base::log10(0.05), lty = 2)
+
+graphics::plot(tab_plot$logFC, -base::log10(tab_plot$P_BH),
+               pch = 16, col = ifelse(tab_plot$P_BH < 0.05, 2, 1),
+               xlab = "logFC", ylab = "-log10 BH p",
+               main = "Volcano — BH adjusted")
+graphics::abline(h = -base::log10(0.05), lty = 2)
+
+graphics::plot(tab_plot$logFC, -base::log10(tab_plot$P_Bonf),
+               pch = 16, col = ifelse(tab_plot$P_Bonf < 0.05, 2, 1),
+               xlab = "logFC", ylab = "-log10 Bonf p",
+               main = "Volcano — Bonferroni adjusted")
+graphics::abline(h = -base::log10(0.05), lty = 2)
+
+graphics::par(mfrow = c(1,1))
+
+```
+
