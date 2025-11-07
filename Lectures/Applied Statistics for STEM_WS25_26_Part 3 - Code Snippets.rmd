@@ -1,0 +1,353 @@
+---
+title: "Applied Statistics for STEM Researchers - Part 3"
+author: "Frank Hause"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+```{r}
+# ──────────────────────────────────────────────
+# Z-Score Normalization
+# • Standardizes data by centering (mean = 0) and scaling (sd = 1)
+# • Useful for comparing variables with different scales
+# ──────────────────────────────────────────────
+
+# Example data
+Measurements <- c(45, 50, 55, 60, 65, 70, 75)
+
+# Perform Z-score normalization
+Z_Score <- base::scale(Measurements)
+
+# Display results
+base::cbind(Measurements, Z_Score)
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Log2 Transformation
+# • Reduces right-skewness and stabilizes variance
+# • Commonly used in RNA-seq and proteomics data
+# ──────────────────────────────────────────────
+
+# Example data
+Measurements <- c(1, 2, 4, 8, 16, 32, 64)
+
+# Apply log2 transformation
+log2Normalized <- base::log2(Measurements)
+
+# Display results
+base::cbind(Measurements, log2Normalized)
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Bonferroni Correction
+# • Controls the family-wise error rate (FWER)
+# • Very strict method → lowers false positives but increases false negatives
+# ──────────────────────────────────────────────
+
+# Example p-values
+p_values <- c(0.001, 0.02, 0.03, 0.15, 0.25)
+
+# Adjust p-values using Bonferroni correction
+bonferroni_p <- stats::p.adjust(p_values, method = "bonferroni")
+
+# Display results
+base::data.frame(
+  Raw_p = p_values,
+  Bonferroni_Adjusted_p = bonferroni_p
+)
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Benjamini–Hochberg (BH) Correction
+# • Controls the False Discovery Rate (FDR)
+# • Less conservative than Bonferroni, suitable for high-throughput data
+# ──────────────────────────────────────────────
+
+# Example p-values
+p_values <- c(0.001, 0.02, 0.03, 0.15, 0.25)
+
+# Adjust p-values using Benjamini–Hochberg (FDR) method
+bh_p <- stats::p.adjust(p_values, method = "BH")
+
+# Display results
+base::data.frame(
+  Raw_p = p_values,
+  BH_Adjusted_p = bh_p
+)
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Principal Component Analysis (PCA)
+# • Reduces high-dimensional data into few uncorrelated components
+# • Preserves most of the original variance
+# ──────────────────────────────────────────────
+
+# Load required package
+if (!requireNamespace("mixOmics", quietly = TRUE)) BiocManager::install("mixOmics")
+library(mixOmics)
+
+# Custom colors (your seminar palette)
+color_palette <- c("#027375", "#e38188", "#234E70")
+
+# Generate example data
+set.seed(123)
+group_labels <- rep(c("Group 1", "Group 2", "Group 3"), each = 20)
+
+# Create dataset with group differences across variables
+data <- base::data.frame(
+  Variable1 = c(stats::rnorm(20, 5, 2), stats::rnorm(20, 10, 2), stats::rnorm(20, 15, 2)),
+  Variable2 = c(stats::rnorm(20, 3, 1.5), stats::rnorm(20, 7, 1.5), stats::rnorm(20, 11, 1.5)),
+  Variable3 = stats::rnorm(60, 6, 2),
+  Variable4 = stats::rnorm(60, 8, 3)
+)
+rownames(data) <- paste0("Sample_", 1:60)
+
+# Perform PCA with mixOmics
+pca_result <- mixOmics::pca(data, ncomp = 2)
+
+# Visualize PCA
+mixOmics::plotIndiv(
+  pca_result,
+  group = group_labels,
+  legend = TRUE,
+  legend.title = "Groups",
+  title = "PCA: Simplified Data with Three Groups",
+  pch = 16,  # Circle shape
+  size.title = 14,
+  size.subtitle = 12,
+  size.legend = 10,
+  col    = color_palette
+)
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# PLS-DA with Three Groups (mixOmics)
+# • Supervised dimension reduction maximizing X–Y covariance
+# • Uses custom seminar palette for group colors
+# ──────────────────────────────────────────────
+
+# Ensure mixOmics is available
+if (!requireNamespace("mixOmics", quietly = TRUE)) utils::install.packages("mixOmics")
+
+# Custom colors (your seminar palette)
+color_palette <- c("#027375", "#e38188", "#234E70")
+
+set.seed(123)
+group_labels <- base::factor(rep(c("Group 1", "Group 2", "Group 3"), each = 20))
+
+# Simulated dataset with group differences
+data <- base::data.frame(
+  Var1 = c(stats::rnorm(20, 5, 2),  stats::rnorm(20, 10, 2), stats::rnorm(20, 15, 2)),
+  Var2 = c(stats::rnorm(20, 3, 1.5), stats::rnorm(20, 7, 1.5), stats::rnorm(20, 11, 1.5)),
+  Var3 = stats::rnorm(60, 6, 2),
+  Var4 = stats::rnorm(60, 8, 3)
+)
+rownames(data) <- paste0("Sample_", 1:60)
+
+# Perform PLS-DA
+plsda_res <- mixOmics::plsda(data, group_labels, ncomp = 2)
+
+# Visualize
+mixOmics::plotIndiv(
+  plsda_res,
+  group  = group_labels,
+  col    = color_palette,
+  legend = TRUE,
+  title  = "PLS-DA: Group Separation via Latent Components",
+  pch    = 16,
+  size.title  = 14,
+  size.legend = 10
+)
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Hierarchical Clustering (3D points → dendrogram)
+# • Distance: Euclidean on x,y,z
+# • Linkage: Complete (max inter-cluster distance)
+# ──────────────────────────────────────────────
+
+# Define six points in 3D space
+points_3d <- base::data.frame(
+  Point = paste0("Sample_", 1:6),
+  x = c(0.7, -0.5, 0.2, -0.3, 0.8, -0.7),
+  y = c(0.5, -0.7, 0.3, 0.6, -0.4, 0.1),
+  z = c(0.8,  0.2, -0.6, 0.1, -0.2, 0.9)
+)
+
+# Compute the distance matrix (Euclidean)
+dist_matrix <- stats::dist(points_3d[, c("x", "y", "z")], method = "euclidean")
+
+# Perform hierarchical clustering (complete linkage)
+hclust_result <- stats::hclust(dist_matrix, method = "complete")
+
+# Plot the dendrogram
+graphics::plot(
+  hclust_result,
+  labels = points_3d$Point,
+  main = "Hierarchical Clustering Dendrogram",
+  sub = "",
+  xlab = "",
+  ylab = "Distance"
+)
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# K-means Clustering (2D points) + centroid visualization
+# • Distance: Euclidean (default)
+# • Initialization: multiple starts (nstart = 10) for stability
+# ──────────────────────────────────────────────
+
+# Ensure ggplot2 is available
+if (!requireNamespace("ggplot2", quietly = TRUE)) utils::install.packages("ggplot2")
+
+# Define six points in 2D space
+points_2d <- base::data.frame(
+  Point = paste0("Sample_", 1:6),
+  x = c(0.7, -0.5, 0.2, -0.3, 0.8, -0.7),
+  y = c(0.5, -0.7, 0.3, 0.6, -0.4, 0.1)
+)
+
+# Number of clusters
+k <- 2L
+
+# K-means clustering
+set.seed(42)
+kmeans_result <- stats::kmeans(points_2d[, c("x", "y")], centers = k, nstart = 10)
+
+# Add cluster assignments
+points_2d$Cluster <- base::as.factor(kmeans_result$cluster)
+
+# Extract centroid coordinates
+centroids <- base::as.data.frame(kmeans_result$centers)
+base::colnames(centroids) <- c("x", "y")
+centroids$Cluster <- base::as.factor(seq_len(k))
+
+# Plot clustering result with centroids
+p <- ggplot2::ggplot(points_2d, ggplot2::aes(x = x, y = y, color = Cluster)) +
+  ggplot2::geom_point(size = 4) +
+  ggplot2::geom_text(ggplot2::aes(label = Point), vjust = -1.5, size = 3.5) +
+  ggplot2::geom_point(data = centroids, ggplot2::aes(x = x, y = y),
+                      size = 6, shape = 4, color = "black") +
+  ggplot2::coord_cartesian(xlim = c(-2, 2), ylim = c(-2, 2)) +
+  ggplot2::labs(title = "K-means Clustering of Six Points",
+                x = "X-axis", y = "Y-axis", color = "Cluster") +
+  ggplot2::theme_minimal(base_size = 14) +
+  ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5))
+
+p
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# Differential Expression with limma-voom
+# • Input: expression_matrix.tsv (gene + counts), pheno.tsv (sample_id, group[, batch])
+# • Steps: import → align → design → voom → linear model → contrast → BH-adjusted results
+# ──────────────────────────────────────────────
+
+# Load packages (install if missing)
+if (!requireNamespace("readr", quietly = TRUE))  utils::install.packages("readr")
+if (!requireNamespace("limma", quietly = TRUE))  BiocManager::install("limma")
+if (!requireNamespace("edgeR", quietly = TRUE))  BiocManager::install("edgeR")
+library(readr); library(limma); library(edgeR)
+
+# 1) Load data ---------------------------------------------------------------
+expr_df <- readr::read_tsv("expression_matrix.tsv")  # columns: gene, sample1, sample2, ...
+pheno   <- readr::read_tsv("pheno.tsv")              # columns: sample_id, group[, batch]
+
+# 2) Shape matrix and align columns to pheno --------------------------------
+gene_ids <- expr_df$gene
+expr_mat <- base::as.matrix(expr_df[, -1, drop = FALSE])
+base::rownames(expr_mat) <- gene_ids
+
+# Ensure samples match between expression matrix and pheno table
+base::stopifnot(all(base::colnames(expr_mat) %in% pheno$sample_id))
+pheno <- pheno[base::match(base::colnames(expr_mat), pheno$sample_id), , drop = FALSE]
+base::stopifnot(base::identical(base::colnames(expr_mat), pheno$sample_id))
+
+# 3) Design matrix -----------------------------------------------------------
+pheno$group <- base::factor(pheno$group)  # ensure factor
+if ("batch" %in% base::colnames(pheno)) {
+  design <- stats::model.matrix(~ 0 + group + batch, data = pheno)
+} else {
+  design <- stats::model.matrix(~ 0 + group, data = pheno)
+}
+base::colnames(design) <- make.names(base::colnames(design))
+
+# 4) voom + linear modeling --------------------------------------------------
+y <- edgeR::DGEList(counts = expr_mat)
+keep <- edgeR::filterByExpr(y, group = pheno$group)
+y <- y[keep, , keep.lib.sizes = FALSE]
+y <- edgeR::calcNormFactors(y, method = "TMM")
+
+v   <- limma::voom(y, design = design, plot = FALSE)
+fit <- limma::lmFit(v, design)
+
+# 5) Contrast: last level vs first level ------------------------------------
+lev <- base::levels(pheno$group)
+contrast_str <- base::paste0("group", lev[2], " - group", lev[1])
+cont <- limma::makeContrasts(contrasts = contrast_str, levels = design)
+
+fit2 <- limma::contrasts.fit(fit, cont)
+fit2 <- limma::eBayes(fit2, robust = TRUE, trend = TRUE)
+
+# 6) Results -----------------------------------------------------------------
+tt <- limma::topTable(fit2, coef = 1, number = Inf, sort.by = "P")
+tt <- base::cbind(gene = base::rownames(tt), tt,
+                  FDR = stats::p.adjust(tt$P.Value, method = "BH"))
+base::rownames(tt) <- NULL
+
+# 7) Save and quick summary --------------------------------------------------
+readr::write_tsv(base::as.data.frame(tt), "limma_results.tsv")
+base::print(head(tt, 10))
+base::cat("Significant at FDR < 0.05:", base::sum(tt$FDR < 0.05, na.rm = TRUE), "\n")
+
+```
+
+```{r}
+# ──────────────────────────────────────────────
+# kNN Imputation for Missing Values
+# • Replaces NAs using values from the k most similar samples (rows)
+# • Works best when variables are correlated; not ideal for extreme sparsity
+# ──────────────────────────────────────────────
+
+# Install + load Bioconductor 'impute' if needed
+if (!requireNamespace("impute", quietly = TRUE)) {
+  if (!requireNamespace("BiocManager", quietly = TRUE)) utils::install.packages("BiocManager")
+  BiocManager::install("impute")
+}
+library(impute)
+
+# Simulate data with NAs
+set.seed(42)
+mat <- base::matrix(stats::rnorm(50), nrow = 10)
+mat[base::sample(length(mat), 5)] <- NA
+
+# kNN imputation (k = 5)
+mat_imputed <- impute::impute.knn(mat, k = 5)$data
+
+# Quick checks
+base::c(
+  na_before = base::sum(base::is.na(mat)),
+  na_after  = base::sum(base::is.na(mat_imputed))
+)
+
+# Visual comparison (top-left 5×5 block)
+mat[1:5, 1:5]
+mat_imputed[1:5, 1:5]
+```
+
